@@ -5,10 +5,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Server {
     private List<ClientHandler> clients;
     private AuthService authService;
+    private ExecutorService service = Executors.newCachedThreadPool();
 
     public AuthService getAuthService() {
         return authService;
@@ -38,6 +41,8 @@ public class Server {
                 System.out.println("Клиент подключился");
                 System.out.println("socket.getRemoteSocketAddress(): " + socket.getRemoteSocketAddress());
                 System.out.println("socket.getLocalSocketAddress() " + socket.getLocalSocketAddress());
+
+
                 new ClientHandler(this, socket);
             }
         } catch (IOException e) {
@@ -63,25 +68,35 @@ public class Server {
         }
     }
 
+
+
     void privateMsg(ClientHandler sender, String receiver, String msg) {
-        String message = String.format("[%s] private [%s] : %s", sender.getNick(), receiver, msg);
 
-        for (ClientHandler c : clients) {
-            if(c.getNick().equals(receiver)){
-                c.sendMsg(message);
+        service.execute(new Runnable() {
+            @Override
+            public void run() {
+                String message = String.format("[%s] private [%s] : %s", sender.getNick(), receiver, msg);
 
-                //==============//
-                SQLHandler.addMessage(sender.getNick(),receiver,msg,"once upon a time");
-                //==============//
+                for (ClientHandler c : clients) {
+                    if(c.getNick().equals(receiver)){
+                        c.sendMsg(message);
 
-                if (!sender.getNick().equals(receiver)) {
-                    sender.sendMsg(message);
+                        //==============//
+                        SQLHandler.addMessage(sender.getNick(),receiver,msg,"once upon a time");
+                        //==============//
+
+                        if (!sender.getNick().equals(receiver)) {
+                            sender.sendMsg(message);
+                        }
+
+                        return;
+                    }
                 }
+                sender.sendMsg(String.format("Client %s not found", receiver));
 
-                return;
+
             }
-        }
-        sender.sendMsg(String.format("Client %s not found", receiver));
+        });
     }
 
 
